@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mockapi-yaml"
+dynamic = ["version"]
+description = "Zero-code mock REST API server for frontend developers: routes in YAML with templated JSON, fake data, latency and error injection, in-memory CRUD resources, OpenAPI 3 examples, CORS, hot reload and a request log."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Saizul Amin" }]
+keywords = ["mock-server", "mock-api", "rest-api", "yaml", "openapi", "frontend", "fake-data", "json-server", "testing", "starlette"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Topic :: Software Development :: Testing :: Mocking",
+    "Typing :: Typed",
+]
+dependencies = [
+    "starlette>=0.37,<2",
+    "uvicorn>=0.29,<1",
+    "PyYAML>=6.0,<7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "ruff>=0.4", "httpx>=0.27,<1"]
+
+[project.urls]
+Homepage = "https://github.com/saizul/mockapi-yaml"
+Issues = "https://github.com/saizul/mockapi-yaml/issues"
+Changelog = "https://github.com/saizul/mockapi-yaml/blob/main/CHANGELOG.md"
+
+[project.scripts]
+mockapi = "mockapi_yaml.cli:main"
+mockapi-yaml = "mockapi_yaml.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "mockapi_yaml._version.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+mockapi_yaml = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+filterwarnings = [
+    # Starlette >= 1.x prefers httpx2 for its TestClient; httpx still works.
+    "ignore:Using `httpx` with `starlette.testclient`",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["src", "tests"]
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "C4", "SIM", "RUF"]
+ignore = ["SIM108", "RUF022", "RUF001"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]

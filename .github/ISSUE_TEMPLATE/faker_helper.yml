@@ -1,0 +1,27 @@
+name: New faker helper
+description: Ask for (or offer to add) a {{faker.*}} helper
+labels: ["faker", "good first issue"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        See "Add a faker helper" in CONTRIBUTING.md. Most helpers are a few lines plus a test.
+  - type: input
+    id: name
+    attributes:
+      label: Helper name and arguments
+      placeholder: "faker.iban(country='DE')"
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Example output
+    validations:
+      required: true
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Contribution
+      options:
+        - label: I would like to implement this helper

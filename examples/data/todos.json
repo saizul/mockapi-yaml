@@ -1,0 +1,5 @@
+[
+  { "id": 1, "title": "Try mockapi-yaml", "done": true },
+  { "id": 2, "title": "Point the frontend at http://127.0.0.1:4010/api", "done": false },
+  { "id": 3, "title": "Replace the mock with the real API", "done": false }
+]

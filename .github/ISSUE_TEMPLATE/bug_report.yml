@@ -1,0 +1,36 @@
+name: Bug report
+description: mockapi-yaml crashed, rejected a valid mock file or answered differently than documented
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: The request you sent (curl or fetch), the response you got and any log lines.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Mock file
+      description: The smallest mock.yaml (or OpenAPI snippet) that shows the problem.
+      render: yaml
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "Output of: mockapi --version (or the image tag)"
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: "Docker image on macOS / pip install on Python 3.12, Windows 11"

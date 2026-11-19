@@ -1,0 +1,14 @@
+# docker compose -f examples/docker-compose.yml up
+# Edit examples/mock.yaml while it runs: changes are picked up on the next request.
+services:
+  mockapi:
+    image: ghcr.io/saizul/mockapi-yaml:latest
+    ports:
+      - "4010:4010"
+    volumes:
+      - ./:/config:ro          # mock.yaml, openapi.yaml and data/ live here
+    environment:
+      MOCKAPI_CONFIG: /config/mock.yaml
+    read_only: true
+    security_opt:
+      - no-new-privileges:true

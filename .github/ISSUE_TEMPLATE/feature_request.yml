@@ -1,0 +1,20 @@
+name: Feature request
+description: Suggest a new template helper, matcher, resource option or admin endpoint
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to mock?
+      description: Describe the API behaviour your frontend needs.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: How would you like to write it in mock.yaml?
+      render: yaml
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
