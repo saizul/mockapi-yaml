@@ -51,6 +51,19 @@ class Settings:
     headers: dict[str, str] = field(default_factory=dict)
 
 
+RESPONSE_MODES = ("sequence", "cycle", "random")
+
+
+@dataclass
+class RouteResponse:
+    """One entry of a route's ``responses`` list."""
+
+    status: int = 200
+    headers: dict[str, str] = field(default_factory=dict)
+    body: Any = None
+    file: Path | None = None
+
+
 @dataclass
 class Route:
     path: str
@@ -66,6 +79,9 @@ class Route:
     latency: Latency | None = None
     error_rate: float | None = None
     error: ErrorResponse | None = None
+    responses: list[RouteResponse] = field(default_factory=list)
+    """When set, answered in turn (``mode``) instead of ``status``/``body``/``file``."""
+    mode: str = "sequence"
     source: str = "routes"
     pattern: re.Pattern[str] = field(default=re.compile(""), repr=False)
 
@@ -104,6 +120,7 @@ class Config:
     def watched_files(self) -> list[Path]:
         files = [p for p in [self.path, *self.openapi] if p is not None]
         files += [r.file for r in self.routes if r.file is not None]
+        files += [resp.file for r in self.routes for resp in r.responses if resp.file is not None]
         return files
 
 
@@ -240,8 +257,9 @@ def _settings(data: dict[str, Any]) -> Settings:
 
 ROUTE_KEYS = {
     "method", "methods", "path", "name", "status", "headers", "body", "file", "match", "latency", "error_rate",
-    "error",
+    "error", "responses", "mode",
 }  # fmt: skip
+RESPONSE_KEYS = {"status", "headers", "body", "file"}
 
 
 def _methods(value: Any, where: str) -> tuple[str, ...]:
@@ -257,6 +275,40 @@ def _methods(value: Any, where: str) -> tuple[str, ...]:
     return tuple(methods)
 
 
+def _file(value: Any, where: str, base_dir: Path) -> Path | None:
+    if value is None:
+        return None
+    file = (base_dir / str(value)).resolve()
+    if not file.is_file():
+        raise ConfigError(f"{where}: {file} does not exist")
+    return file
+
+
+def _responses(value: Any, where: str, base_dir: Path) -> list[RouteResponse]:
+    if not isinstance(value, list) or not value:
+        raise ConfigError(f"{where}: expected a non-empty list of responses")
+    out = []
+    for i, item in enumerate(value):
+        at = f"{where}[{i}]"
+        data = _mapping(item, at)
+        _check_keys(data, RESPONSE_KEYS, at)
+        if "body" in data and "file" in data:
+            raise ConfigError(f"{at}: use either body or file, not both")
+        for problem in validate_templates(data.get("body"), f"{at}.body"):
+            raise ConfigError(problem)
+        for problem in validate_templates(data.get("headers"), f"{at}.headers"):
+            raise ConfigError(problem)
+        out.append(
+            RouteResponse(
+                status=_status(data.get("status", 200), f"{at}.status"),
+                headers=_headers(data.get("headers"), f"{at}.headers"),
+                body=data.get("body"),
+                file=_file(data.get("file"), f"{at}.file", base_dir),
+            )
+        )
+    return out
+
+
 def _route(data: Any, index: int, base_dir: Path) -> Route:
     where = f"routes[{index}]"
     data = _mapping(data, where)
@@ -268,11 +320,18 @@ def _route(data: Any, index: int, base_dir: Path) -> Route:
     _check_keys(match, {"query", "headers", "body"}, f"{where}.match")
     if "body" in data and "file" in data:
         raise ConfigError(f"{where}: use either body or file, not both")
-    file = None
-    if data.get("file") is not None:
-        file = (base_dir / str(data["file"])).resolve()
-        if not file.is_file():
-            raise ConfigError(f"{where}.file: {file} does not exist")
+    responses: list[RouteResponse] = []
+    if "responses" in data:
+        clash = sorted({"status", "body", "file"} & set(data))
+        if clash:
+            raise ConfigError(f"{where}: {', '.join(clash)} cannot be combined with responses; set them per response")
+        responses = _responses(data["responses"], f"{where}.responses", base_dir)
+    mode = data.get("mode", "sequence")
+    if "mode" in data and not responses:
+        raise ConfigError(f"{where}.mode only applies to routes with responses")
+    if mode not in RESPONSE_MODES:
+        raise ConfigError(f"{where}.mode must be one of {', '.join(RESPONSE_MODES)}")
+    file = _file(data.get("file"), f"{where}.file", base_dir)
     for problem in validate_templates(data.get("body"), f"{where}.body"):
         raise ConfigError(problem)
     for problem in validate_templates(data.get("headers"), f"{where}.headers"):
@@ -291,6 +350,8 @@ def _route(data: Any, index: int, base_dir: Path) -> Route:
         latency=parse_latency(data["latency"], f"{where}.latency") if "latency" in data else None,
         error_rate=_error_rate(data["error_rate"], f"{where}.error_rate") if "error_rate" in data else None,
         error=_error(data["error"], f"{where}.error") if data.get("error") is not None else None,
+        responses=responses,
+        mode=mode,
     )
 
 

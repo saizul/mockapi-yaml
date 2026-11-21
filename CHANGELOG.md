@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Response sequences: a route with `responses: [...]` answers with the next entry on
+  every matching request. `mode: sequence` (default) repeats the last entry once the
+  list is used up, `mode: cycle` starts over and `mode: random` picks one (seeded by
+  `settings.seed`). Each entry takes `status`, `headers`, `body` or `file`; counters
+  restart on reload and on `POST /__mockapi/reset`. `X-Mock-Source`, the admin routes
+  list and `mockapi check` show the entries.
+
 ## [0.1.0] - 2026-11-19
 
 ### Added

@@ -29,24 +29,21 @@ Each of these is self-contained and touches one or two files plus tests.
 1. **`X-Mock-Delay` and `X-Mock-Status` request headers.** Let a client override latency
    (milliseconds) and the status of a single request, for example to test one slow call
    from browser dev tools. (`app.py`, `tests/test_behaviour.py`, README)
-2. **Response sequences.** `responses: [{status: 202}, {status: 200, body: ...}]` on a
-   route answers them in turn (and `mode: random` picks one). (`config.py`, `app.py`,
-   tests)
-3. **New faker helpers.** `iban`, `credit_card_test` (only published test numbers),
+2. **New faker helpers.** `iban`, `credit_card_test` (only published test numbers),
    `time`, `currency_code`, `mime_type`, `file_name`. See "Add a faker helper" below.
    (`fake.py`, `tests/test_templating.py`, README table)
-4. **`slice` and `join` filters.** `{{body.tags | join(', ')}}`,
+3. **`slice` and `join` filters.** `{{body.tags | join(', ')}}`,
    `{{body.items | slice(0, 3)}}`. (`templating.py`, tests)
-5. **`mockapi check --strict`.** Fail when two routes are identical (same method, path
+4. **`mockapi check --strict`.** Fail when two routes are identical (same method, path
    and match), because the second one can never answer. (`cli.py`, `tests/test_cli.py`)
-6. **Delay only the first byte vs the whole body.** Add `settings.latency_mode: total`
+5. **Delay only the first byte vs the whole body.** Add `settings.latency_mode: total`
    that counts processing time towards the target latency. (`app.py`, tests)
-7. **Nested resources.** `GET /users/{id}/posts` returns posts whose `userId` matches,
+6. **Nested resources.** `GET /users/{id}/posts` returns posts whose `userId` matches,
    configured with `resources.posts.parent: { resource: users, field: userId }`.
    (`config.py`, `resources.py`, `app.py`, tests)
-8. **OpenAPI `servers` prefix.** Optionally mount operations under the path of
+7. **OpenAPI `servers` prefix.** Optionally mount operations under the path of
    `servers[0].url` (`openapi_use_servers: true`). (`openapi.py`, `app.py`, tests)
-9. **Windows-friendly paths in `file:`.** Add tests with backslashes and make sure the
+8. **Windows-friendly paths in `file:`.** Add tests with backslashes and make sure the
    error message shows the resolved path. (`config.py`, `tests/test_config.py`)
 
 ## Development setup

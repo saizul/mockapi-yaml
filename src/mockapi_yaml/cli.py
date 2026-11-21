@@ -81,7 +81,10 @@ def cmd_check(args: argparse.Namespace) -> int:
     app = create_app(_config_path(args), reload=False)
     info = app.describe()
     for route in info["routes"]:
-        print(f"route     {','.join(route['methods']):<7} {route['path']}  -> {route['status']}")
+        answers = route["status"]
+        if "responses" in route:
+            answers = f"{', '.join(map(str, route['responses']))} ({route['mode']})"
+        print(f"route     {','.join(route['methods']):<7} {route['path']}  -> {answers}")
     for res in info["resources"]:
         print(f"resource  {res['path']}  ({res['count']} items{', read-only' if res['readonly'] else ''})")
     for op in info["openapi"]:
