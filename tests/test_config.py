@@ -55,6 +55,16 @@ def test_compile_path():
         ({"resources": {"a": {"path": "/x"}, "b": {"path": "/x"}}}, "already used"),
         ({"resources": 5}, "resources must be"),
         ({"openapi": "missing.yaml"}, "does not exist"),
+        ({"routes": [{"path": "/x", "responses": []}]}, "non-empty list"),
+        ({"routes": [{"path": "/x", "responses": {"status": 200}}]}, "non-empty list"),
+        ({"routes": [{"path": "/x", "status": 201, "responses": [{}]}]}, "cannot be combined with responses"),
+        ({"routes": [{"path": "/x", "responses": [{"latency": 5}]}]}, r"responses\[0\]: unknown key"),
+        ({"routes": [{"path": "/x", "responses": [{}, {"status": 99}]}]}, r"responses\[1\].status"),
+        ({"routes": [{"path": "/x", "responses": [{"body": 1, "file": "a.json"}]}]}, "either body or file"),
+        ({"routes": [{"path": "/x", "responses": [{"file": "missing.json"}]}]}, "does not exist"),
+        ({"routes": [{"path": "/x", "responses": [{"body": "{{faker.nope}}"}]}]}, "unknown faker helper"),
+        ({"routes": [{"path": "/x", "responses": [{}], "mode": "shuffle"}]}, "mode must be one of"),
+        ({"routes": [{"path": "/x", "mode": "cycle"}]}, "only applies to routes with responses"),
     ],
 )
 def test_invalid_configs(tmp_path, data, message):

@@ -127,6 +127,15 @@ def test_hot_reload_picks_up_changes(mock, harness):
     assert harness.app.reloads == 1
 
 
+def test_hot_reload_restarts_response_sequences(mock, harness):
+    client = mock("routes: [{ path: /s, responses: [{ body: a }, { body: b }] }]\n")
+    assert [client.get("/s").text for _ in range(2)] == ["a", "b"]
+    harness.write("routes: [{ path: /s, responses: [{ body: a }, { body: c }] }]\n")
+    harness.clock.advance(2)
+    _bump_mtime(harness.path)
+    assert [client.get("/s").text for _ in range(2)] == ["a", "c"]
+
+
 def test_hot_reload_keeps_old_definition_on_error(mock, harness):
     client = mock("routes: [{ path: /v, body: one }]\n")
     harness.write("routes: [{ path: v-without-slash }]\n")

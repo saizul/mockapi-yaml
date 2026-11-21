@@ -41,3 +41,10 @@ def test_config_from_environment(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("MOCKAPI_CONFIG", str(path))
     assert main(["check"]) == 0
     assert "/x" in capsys.readouterr().out
+
+
+def test_check_lists_response_sequences(tmp_path, capsys):
+    path = tmp_path / "mock.yaml"
+    path.write_text("routes: [{ path: /job, mode: cycle, responses: [{ status: 202 }, { status: 200 }] }]\n", "utf-8")
+    assert main(["-c", str(path), "check"]) == 0
+    assert "/job  -> 202, 200 (cycle)" in capsys.readouterr().out

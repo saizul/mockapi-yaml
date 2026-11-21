@@ -24,7 +24,7 @@ from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from mockapi_yaml._version import __version__
-from mockapi_yaml.config import Config, ConfigError, ErrorResponse, Latency, Route, load_config
+from mockapi_yaml.config import Config, ConfigError, ErrorResponse, Latency, Route, RouteResponse, load_config
 from mockapi_yaml.fake import Fake
 from mockapi_yaml.openapi import Operation, load_operations, parse_prefer
 from mockapi_yaml.resources import Collection, ResourceError
@@ -102,6 +102,7 @@ class MockApp:
         config = source if isinstance(source, Config) else load_config(source)
         self.log: collections.deque[dict[str, Any]] = collections.deque(maxlen=config.settings.log_size or None)
         self.request_counter = 0
+        self.response_counters: dict[int, int] = {}
         self._apply(config)
 
     # -- configuration and reload ------------------------------------------
@@ -111,6 +112,8 @@ class MockApp:
             operations.extend(load_operations(spec))
         self.config = config
         self.operations = operations
+        # Route indices may point to different routes after a reload, so sequences start over.
+        self.response_counters = {}
         self.fake = Fake(config.settings.seed)
         self.renderer = Renderer(self.fake)
         self.rng = random.Random(config.settings.seed)
@@ -321,27 +324,43 @@ class MockApp:
                 return False
         return route.match_body is None or _value_matches(route.match_body, context["body"])
 
+    def _pick_response(self, route: Route, index: int) -> tuple[int, RouteResponse]:
+        """The next entry of ``route.responses`` for its ``mode``, and its position."""
+        count = len(route.responses)
+        if route.mode == "random":
+            n = self.rng.randrange(count)
+        else:
+            calls = self.response_counters.get(index, 0)
+            self.response_counters[index] = calls + 1
+            n = calls % count if route.mode == "cycle" else min(calls, count - 1)
+        return n, route.responses[n]
+
     def _route_outcome(self, route: Route, index: int, context: dict[str, Any]) -> Outcome:
         source = f"routes[{index}]" + (f" {route.name}" if route.name else "")
+        status, extra_headers, body, file = route.status, {}, route.body, route.file
+        if route.responses:
+            n, picked = self._pick_response(route, index)
+            source += f" responses[{n}]"
+            status, extra_headers, body, file = picked.status, picked.headers, picked.body, picked.file
         headers = {
             **self.config.settings.headers,
-            **{k: str(self.renderer.render(v, context)) for k, v in route.headers.items()},
+            **{k: str(self.renderer.render(v, context)) for k, v in {**route.headers, **extra_headers}.items()},
         }
         outcome = Outcome(
-            route.status, headers=headers, source=source, latency=route.latency, error_rate=route.error_rate,
+            status, headers=headers, source=source, latency=route.latency, error_rate=route.error_rate,
             error=route.error,
         )  # fmt: skip
-        if route.file is not None:
-            suffix = route.file.suffix.lower()
+        if file is not None:
+            suffix = file.suffix.lower()
             if suffix in (".json", ".yaml", ".yml"):
-                text = route.file.read_text("utf-8")
+                text = file.read_text("utf-8")
                 data = json.loads(text) if suffix == ".json" else yaml.safe_load(text)
                 outcome.body = self.renderer.render(data, context)
             else:
-                outcome.raw = route.file.read_bytes()
-                outcome.content_type = mimetypes.guess_type(route.file.name)[0] or "application/octet-stream"
+                outcome.raw = file.read_bytes()
+                outcome.content_type = mimetypes.guess_type(file.name)[0] or "application/octet-stream"
         else:
-            outcome.body = self.renderer.render(route.body, context)
+            outcome.body = self.renderer.render(body, context)
         return outcome
 
     def _resource(
@@ -487,7 +506,8 @@ class MockApp:
                 "name": r.name,
                 "methods": list(r.methods),
                 "path": base + r.path,
-                "status": r.status,
+                "status": r.responses[0].status if r.responses else r.status,
+                **({"responses": [x.status for x in r.responses], "mode": r.mode} if r.responses else {}),
             }
             for i, r in enumerate(self.config.routes)
         ]
@@ -533,6 +553,7 @@ class MockApp:
         if sub == "/reset" and method == "POST":
             for collection in self.collections.values():
                 collection.reset()
+            self.response_counters.clear()
             return self._json(200, {"status": "reset", "resources": list(self.collections)})
         if sub == "/reload" and method == "POST":
             if not self.reload_enabled:

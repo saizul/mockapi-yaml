@@ -242,3 +242,67 @@ def test_yaml_dates_serialize(mock):
         """
     )
     assert client.get("/d").json() == {"day": "2026-01-02"}
+
+
+def test_response_sequence_answers_in_turn_then_repeats_the_last(mock):
+    client = mock(
+        """
+        routes:
+          - method: GET
+            path: /jobs/{id}
+            name: job-status
+            headers: { X-Job: "{{params.id}}" }
+            responses:
+              - status: 202
+                headers: { Retry-After: "1" }
+                body: { state: queued }
+              - status: 202
+                body: { state: running }
+              - body: { state: done, id: "{{params.id | int}}" }
+        """
+    )
+    first = client.get("/jobs/7")
+    assert first.status_code == 202
+    assert first.json() == {"state": "queued"}
+    assert first.headers["retry-after"] == "1"
+    assert first.headers["x-job"] == "7"
+    assert first.headers["x-mock-source"] == "routes[0] job-status responses[0]"
+    second = client.get("/jobs/7")
+    assert (second.status_code, second.json()) == (202, {"state": "running"})
+    assert "retry-after" not in second.headers
+    for _ in range(3):
+        done = client.get("/jobs/7")
+        assert (done.status_code, done.json()) == (200, {"state": "done", "id": 7})
+
+
+def test_response_cycle_random_and_reset(mock, harness):
+    harness.write('{"from": "file"}', "payload.json")
+    client = mock(
+        """
+        settings: { seed: 3 }
+        routes:
+          - path: /flaky
+            mode: cycle
+            responses:
+              - status: 503
+              - file: payload.json
+          - path: /coin
+            mode: random
+            responses:
+              - body: heads
+              - body: tails
+        """
+    )
+    statuses = [client.get("/flaky").status_code for _ in range(4)]
+    assert statuses == [503, 200, 503, 200]
+    assert client.get("/flaky").status_code == 503
+    assert client.post("/__mockapi/reset").status_code == 200
+    resp = client.get("/flaky")
+    assert resp.status_code == 503
+    assert client.get("/flaky").json() == {"from": "file"}
+    flips = {client.get("/coin").text for _ in range(40)}
+    assert flips == {"heads", "tails"}
+    routes = client.get("/__mockapi/routes").json()["routes"]
+    assert routes[0]["responses"] == [503, 200]
+    assert routes[0]["mode"] == "cycle"
+    assert routes[0]["status"] == 503

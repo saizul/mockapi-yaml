@@ -60,6 +60,8 @@ mockapi -c mock.yaml serve        # http://127.0.0.1:4010
   headers, JSON or text body, or a body loaded from a file.
 - **Request matching.** Serve different answers for different query parameters, headers or
   JSON bodies (`match:`). The first matching route wins.
+- **Response sequences.** `responses: [...]` answers in turn (`202`, `202`, then `200`) to
+  mock polling and retries, cycles through them, or picks one at random.
 - **Templates.** `{{params.id}}`, `{{query.page | int}}`, `{{body.email}}`,
   `{{headers.authorization}}`, `{{now}}`, `{{uuid}}` and 36 `{{faker.*}}` helpers. All of
   them are built in, with no Faker dependency. Use `$repeat` to generate lists. Set a seed
@@ -173,6 +175,41 @@ routes:
 Match values can be a string or number (exact match), a list (any of them), `"*"`
 (present) or `/regex/`. Header names are case-insensitive. A body match checks that the
 request contains the given keys and values. For arrays, every listed item must be present.
+
+### Response sequences
+
+A route with `responses` answers with the next entry on every matching request, which is
+how you mock a job that is queued, then running, then done, or an endpoint that fails
+once and then works:
+
+```yaml
+routes:
+  - path: /jobs/{id}
+    headers: { X-Job: "{{params.id}}" }     # shared by every response
+    responses:                              # mode: sequence (the default)
+      - status: 202
+        headers: { Retry-After: "1" }
+        body: { state: queued }
+      - status: 202
+        body: { state: running }
+      - body: { state: done }               # repeated from now on
+
+  - path: /flaky
+    mode: cycle                             # 503, 200, 503, 200, ...
+    responses:
+      - status: 503
+      - file: fixtures/payload.json
+
+  - path: /coin
+    mode: random                            # uses settings.seed when set
+    responses: [{ body: heads }, { body: tails }]
+```
+
+Each response takes `status`, `headers`, `body` or `file`, like a route; `headers` are
+merged over the route's `headers`. `mode` is `sequence` (in turn, then the last one
+repeats), `cycle` (start over after the last one) or `random`. Counters are per route,
+start over when the file is reloaded and are reset by `POST /__mockapi/reset`.
+`X-Mock-Source` names the entry that answered, e.g. `routes[0] responses[2]`.
 
 When the body is a string, the response is `text/plain`. Anything else is JSON. Set a
 `Content-Type` header to override this. Every response has an `X-Mock-Source` header
@@ -325,7 +362,7 @@ for an unknown path is never replaced by an injected error. Injected errors are 
 | `GET /__mockapi/routes` | routes, resources (with item counts) and OpenAPI operations |
 | `GET /__mockapi/log?limit=50` | recent requests: time, method, path, query, status, duration, source, body |
 | `DELETE /__mockapi/log` | clear the log |
-| `POST /__mockapi/reset` | reset every resource to its seed |
+| `POST /__mockapi/reset` | reset every resource to its seed and restart response sequences |
 | `POST /__mockapi/reload` | reload the mock file now (`422` with the error if it is invalid) |
 | `GET /__mockapi/health` | `{"status": "ok", "reload_error": null}`, used by the container health check |
 
@@ -361,6 +398,8 @@ Every request is also printed to the console:
 | `headers` | `{}` | response headers (templated) |
 | `body` | empty | response body (templated) |
 | `file` | | read the body from a file relative to the mock file |
+| `responses` | | list of `{status, headers, body, file}` answered in turn instead of `status`, `body` and `file` |
+| `mode` | `sequence` | with `responses`: `sequence`, `cycle` or `random` |
 | `latency`, `error_rate`, `error` | settings | per-route overrides |
 
 ### `resources.<name>`
@@ -429,7 +468,6 @@ documented helpers and filters. There is no `eval`.
 
 Ideas, many of them marked **good first issue**:
 
-- [ ] Response sequences (`responses: [...]` answered in turn or at random)
 - [ ] Stateful routes that read from resources (`{{resources.users.0.name}}`)
 - [ ] Per-request overrides through headers (`X-Mock-Delay`, `X-Mock-Status`)
 - [ ] Request body validation against the OpenAPI schema
